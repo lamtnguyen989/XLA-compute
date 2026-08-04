@@ -1,0 +1,71 @@
+module(name = "xla_compute", version = "0.1")
+
+bazel_dep(name = "xla", version = "")
+bazel_dep(name = "rules_ml_toolchain")
+bazel_dep(name = "rules_cc", version = "0.2.18")
+bazel_dep(name = "rules_python", version = "1.8.5")
+
+bazel_dep(name = "abseil-cpp", version = "20260526.0", repo_name = "com_google_absl")
+bazel_dep(name = "grpc", version = "1.81.0", repo_name = "com_github_grpc_grpc")
+bazel_dep(name = "protobuf", version = "32.1")
+bazel_dep(name = "googletest", version = "")
+
+single_version_override(
+    module_name = "grpc",
+    patch_strip = 1,
+    patches = [
+        "//third_party/grpc:grpc.patch",
+    ],
+    version = "1.81.0",
+)
+
+single_version_override(
+    module_name = "abseil-cpp",
+    version = "20260526.0",
+    patch_strip = 1,
+    patches = [
+        "//third_party/absl:btree.patch",
+        "//third_party/absl:build_dll.patch",
+        "//third_party/absl:endian.patch",
+    ],
+)
+
+single_version_override(
+    module_name = "protobuf",
+    patch_strip = 1,
+    patches = [
+        "//third_party/protobuf:protobuf_arena.patch",
+        "//third_party/protobuf:fix_message_lite_incomplete_type.patch",
+        "//third_party/protobuf:fix_python_dist_package.patch",
+    ],
+    version = "32.1",
+)
+
+archive_override(
+    module_name = "googletest",
+    patch_strip = 1,
+    patches = [
+        "//third_party/googletest:0001-Add-ASSERT_OK-EXPECT_OK-ASSERT_OK_AND_ASSIGN-macros.patch",
+    ],
+    strip_prefix = "googletest-28e9d1f26771c6517c3b4be10254887673c94018",
+    urls = ["https://github.com/google/googletest/archive/28e9d1f26771c6517c3b4be10254887673c94018.zip"],
+)
+
+single_version_override(
+    module_name = "rules_python",
+    patch_strip = 1,
+    patches = [
+        "//third_party/py:rules_python_pip_version.patch",
+        "//third_party/py:rules_python_freethreaded.patch",
+        "//third_party/py:rules_python_versions.patch",
+        "//third_party/py:rules_python_scope.patch",
+    ],
+    version = "1.8.5",
+)
+
+archive_override(
+    module_name = "rules_ml_toolchain",
+    integrity = "sha256-OwVoeEJCcEHGXRvC9K7aOjB5VXEg9b6MNGkAh6iMXeU=",
+    strip_prefix = "rules_ml_toolchain-2eddbc595cc0bbe650c2640204f66b14f015f1a8",
+    urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/2eddbc595cc0bbe650c2640204f66b14f015f1a8.tar.gz"],
+)

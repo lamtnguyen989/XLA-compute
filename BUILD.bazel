@@ -1,0 +1,17 @@
+#load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+
+cc_binary(
+    name = "xla_compute",
+    srcs = ["src/main.cc"],
+    deps = [
+        "@xla//xla/hlo/builder:xla_builder",
+        "@xla//xla/client:client_library",
+        "@xla//xla/client:local_client",
+        "@xla//xla/pjrt:pjrt_client",
+        "@xla//xla:literal",
+        "@xla//xla:literal_util",
+        "@xla//xla:shape_util",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)

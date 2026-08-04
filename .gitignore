@@ -1,0 +1,7 @@
+compile_commands.json
+build/
+user.bazelrc
+bazel-bin/
+bazel-out/
+third_party/
+WORKSPACE

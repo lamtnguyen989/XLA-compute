@@ -1,2 +1,2 @@
 # XLA-compute
-Playgfround for computing with XLABuilder API in C++
+Playground for computing with [XLA](https://openxla.org/) in C++
