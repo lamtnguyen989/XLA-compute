@@ -140,7 +140,7 @@ def scalogram(
     sr: int,
     f_min: float = 20.0,
     f_max: float = 15000.0,
-    n_scales: int = 64,
+    n_scales: int = 128,
     beta: float = 3.0,
     gamma: float = 60.0,
     title: str = "Audio Scalogram",
