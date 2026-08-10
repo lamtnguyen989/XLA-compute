@@ -126,13 +126,7 @@ def hz_to_scale(freq_hz: jnp.ndarray, beta: float, gamma: float) -> jnp.ndarray:
     return omega_peak / (2.0 * jnp.pi * freq_hz)
 
 
-def log_scales(
-    n_scales: int,
-    f_min: float,
-    f_max: float,
-    beta: float = 3.0,
-    gamma: float = 60.0,
-) -> jnp.ndarray:
+def log_scales(n_scales: int, f_min: float, f_max: float, beta: float = 3.0, gamma: float = 60.0,) -> jnp.ndarray:
     freqs = jnp.geomspace(f_min, f_max, n_scales)
     return hz_to_scale(freqs, beta, gamma)
 
@@ -155,7 +149,6 @@ def scalogram(
     scales = log_scales(n_scales, f_min, f_max, beta=beta, gamma=gamma)
     freqs = np.asarray(scale_to_hz(scales, beta, gamma))
 
-    # Fixed: morse_transform -> morse_transform_L1
     W = morse_transform_L1(
         jnp.asarray(signal),
         scales.astype(jnp.float32),
@@ -167,7 +160,6 @@ def scalogram(
     mag = np.asarray(jnp.abs(W))
     t = np.arange(signal.shape[0]) / float(sr)
 
-    # Fixed: added figure and axes initialization
     fig, ax = plt.subplots(figsize=(10, 5))
     im = ax.pcolormesh(t, freqs, mag, shading="auto", cmap="magma")
     ax.set_yscale("log")
