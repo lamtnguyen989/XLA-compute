@@ -3,3 +3,5 @@ matplotlib
 numpy
 jax[cuda13]
 flatbuffers
+
+iree-base-compiler
