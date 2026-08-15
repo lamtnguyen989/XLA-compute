@@ -5,8 +5,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-import soundfile as sf
-
+from typing import List, Dict, Any
 from dataclasses import dataclass
 
 ###
@@ -90,7 +89,7 @@ class ScatteringConfig:
     Q1: int = 8             # Order 1 quality filters
     Q2: int = 1             # Order 2 quality filters
     ref_freq: float = sr/4  # Nyquist
-    T: int = N              # Time-shift invariance count (striding, single global one by default)
+    T: int = N              # Time-shift invariance count (single global one by default, if not this will give back floor(N/T) frames)
 
 # Lowpass filter 
 def gaussian_lowpass_filter(omega: jnp.ndarray, sigma: float) -> jnp.ndarray:
@@ -100,7 +99,7 @@ def gaussian_lowpass_filter(omega: jnp.ndarray, sigma: float) -> jnp.ndarray:
 def bandpass_modulus(x: jnp.ndarray, psi_hat: jnp.ndarray) -> jnp.ndarray:
     x_hat = jnp.fft.fft(x, axis=1)
     W_hat = x_hat[:, None, :] * psi_hat[None, :, :]
-    return jnp.abs(jnp.ifft(W_hat), axis=-1)
+    return jnp.abs(jnp.fft.ifft(W_hat, axis=-1))
 
 
 def octave_frequencies(J: int, Q: int, ref_freq: float):
@@ -139,3 +138,64 @@ def morse_filterbank(cfg: ScatteringConfig):
         phi_hat
     ]
 
+# Lowpass filter convolution
+def lowpass(x: jnp.ndarray, phi_hat_real: jnp.ndarray, T: int) -> jnp.ndarray:
+    N = x.shape[-1]
+    X = jnp.fft.rfft(x, axis=-1) * phi_hat_real[None, None, :]
+    return jnp.fft.irfft(X, n=N, axis=-1)[..., ::T]
+
+# Wavelet scattering
+def morse_scatter(cfg: ScatteringConfig=ScatteringConfig()):
+    
+    # Building filter bank first
+    freqs_1, oct_1, freqs_2, oct_2, psi_hat_1, psi_hat_2, phi_hat = morse_filterbank(cfg)
+
+    # Creating list of valid order-2 childeren per order 1 filter (octave(k2) > octave(k1))
+    # Note the actual data list size is (most-likely) small therefore opted for building natively instead of parallelizing
+    children: List[List[int]] = [
+        [k2 for k2 in range(len(freqs_2)) if oct_2[k2] > oct_1[k1]]
+        for k1 in range(len(freqs_1))
+    ]
+
+    # Extra metadata for the scatter
+    P0: int = 1
+    P1: int = cfg.J * cfg.Q1
+    P2: int = cfg.J * cfg.Q1 * cfg.Q2 * (cfg.J - 1) // 2
+
+    metadata: Dict[str, Any] = dict(
+        J=cfg.J, Q1=cfg.Q1, Q2=cfg.Q2, T=cfg.T,
+        P0=P0, P1=P1, P2=P2, dimension = P0 + P1 + P2,
+        freqs1_hz=freqs_1, freqs2_hz=freqs_2, children=children,
+    )
+
+
+    # Scatter compute
+    @jax.jit
+    def scatter(signal: jnp.ndarray):
+        # Convert signal to Float for consistency
+        x = signal.astype(jnp.float32)
+
+        # Order 0 scatter
+        S0 = lowpass(x[:, None, :], phi_hat, cfg.T)
+
+        # Order 1 scatter
+        U1 = bandpass_modulus(x, psi_hat_1)
+        S1 = lowpass(U1, phi_hat, cfg.T)
+
+        # Order 2 scatter
+        S2_buckets = [] # Wink-wink
+        for k1 in range(P1):
+            idx = children[k1]
+            if not idx:
+                continue
+            idx_arr = jnp.asarray(idx)
+            U2 =  bandpass_modulus(U1[:, k1, :], psi_hat_2[idx_arr])
+            S2_buckets.append(lowpass(U2, phi_hat, cfg.T))
+        
+        S2 = (jnp.concatenate(S2_buckets, axis=1) if S2_buckets
+              else jnp.zeros((signal.shape[0], 0, S0.shape[-1]), dtype=jnp.float32))
+
+        # Return scatterings
+        return S0, S1, S2
+
+    return scatter, metadata

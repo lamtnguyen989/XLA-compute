@@ -2,3 +2,4 @@ soundfile
 matplotlib 
 numpy
 jax[cuda13]
+flatbuffers
