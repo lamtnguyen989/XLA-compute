@@ -5,8 +5,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-import soundfile as sf
-
+from typing import List, Dict, Any
 from dataclasses import dataclass
 
 ###
@@ -100,7 +99,7 @@ def gaussian_lowpass_filter(omega: jnp.ndarray, sigma: float) -> jnp.ndarray:
 def bandpass_modulus(x: jnp.ndarray, psi_hat: jnp.ndarray) -> jnp.ndarray:
     x_hat = jnp.fft.fft(x, axis=1)
     W_hat = x_hat[:, None, :] * psi_hat[None, :, :]
-    return jnp.abs(jnp.ifft(W_hat), axis=-1)
+    return jnp.abs(jnp.fft.ifft(W_hat, axis=-1))
 
 
 def octave_frequencies(J: int, Q: int, ref_freq: float):
@@ -159,8 +158,16 @@ def morse_scatter(cfg: ScatteringConfig=ScatteringConfig()):
     ]
 
     # Extra metadata for the scatter
+    P0: int = 1
     P1: int = cfg.J * cfg.Q1
     P2: int = cfg.J * cfg.Q1 * cfg.Q2 * (cfg.J - 1) // 2
+
+    metadata: Dict[str, Any] = dict(
+        J=cfg.J, Q1=cfg.Q1, Q2=cfg.Q2, T=cfg.T,
+        P0=P0, P1=P1, P2=P2, dimension = P0 + P1 + P2,
+        freqs1_hz=freqs_1, freqs2_hz=freqs_2, children=children,
+    )
+
 
     # Scatter compute
     @jax.jit
@@ -173,7 +180,7 @@ def morse_scatter(cfg: ScatteringConfig=ScatteringConfig()):
 
         # Order 1 scatter
         U1 = bandpass_modulus(x, psi_hat_1)
-        S0 = lowpass(U1, phi_hat, cfg.T)
+        S1 = lowpass(U1, phi_hat, cfg.T)
 
         # Order 2 scatter
         S2_buckets = [] # Wink-wink
@@ -181,11 +188,14 @@ def morse_scatter(cfg: ScatteringConfig=ScatteringConfig()):
             idx = children[k1]
             if not idx:
                 continue
-            idx_arr =  bandpass_modulus_fft(U1[:, k1, :], psi2_hat[idx_arr])
-            U2 =  bandpass_modulus_fft(U1[:, k1, :], psi2_hat[idx_arr])
+            idx_arr = jnp.asarray(idx)
+            U2 =  bandpass_modulus(U1[:, k1, :], psi_hat_2[idx_arr])
             S2_buckets.append(lowpass(U2, phi_hat, cfg.T))
         
+        S2 = (jnp.concatenate(S2_buckets, axis=1) if S2_buckets
+              else jnp.zeros((signal.shape[0], 0, S0.shape[-1]), dtype=jnp.float32))
+
         # Return scatterings
         return S0, S1, S2
 
-    return scatter
+    return scatter, metadata
