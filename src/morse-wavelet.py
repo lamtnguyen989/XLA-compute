@@ -90,7 +90,7 @@ class ScatteringConfig:
     Q1: int = 8             # Order 1 quality filters
     Q2: int = 1             # Order 2 quality filters
     ref_freq: float = sr/4  # Nyquist
-    T: int = N              # Time-shift invariance count (striding, single global one by default)
+    T: int = N              # Time-shift invariance count (single global one by default, if not this will give back floor(N/T) frames)
 
 # Lowpass filter 
 def gaussian_lowpass_filter(omega: jnp.ndarray, sigma: float) -> jnp.ndarray:
@@ -139,3 +139,53 @@ def morse_filterbank(cfg: ScatteringConfig):
         phi_hat
     ]
 
+# Lowpass filter convolution
+def lowpass(x: jnp.ndarray, phi_hat_real: jnp.ndarray, T: int) -> jnp.ndarray:
+    N = x.shape[-1]
+    X = jnp.fft.rfft(x, axis=-1) * phi_hat_real[None, None, :]
+    return jnp.fft.irfft(X, n=N, axis=-1)[..., ::T]
+
+# Wavelet scattering
+def morse_scatter(cfg: ScatteringConfig=ScatteringConfig()):
+    
+    # Building filter bank first
+    freqs_1, oct_1, freqs_2, oct_2, psi_hat_1, psi_hat_2, phi_hat = morse_filterbank(cfg)
+
+    # Creating list of valid order-2 childeren per order 1 filter (octave(k2) > octave(k1))
+    # Note the actual data list size is (most-likely) small therefore opted for building natively instead of parallelizing
+    children: List[List[int]] = [
+        [k2 for k2 in range(len(freqs_2)) if oct_2[k2] > oct_1[k1]]
+        for k1 in range(len(freqs_1))
+    ]
+
+    # Extra metadata for the scatter
+    P1: int = cfg.J * cfg.Q1
+    P2: int = cfg.J * cfg.Q1 * cfg.Q2 * (cfg.J - 1) // 2
+
+    # Scatter compute
+    @jax.jit
+    def scatter(signal: jnp.ndarray):
+        # Convert signal to Float for consistency
+        x = signal.astype(jnp.float32)
+
+        # Order 0 scatter
+        S0 = lowpass(x[:, None, :], phi_hat, cfg.T)
+
+        # Order 1 scatter
+        U1 = bandpass_modulus(x, psi_hat_1)
+        S0 = lowpass(U1, phi_hat, cfg.T)
+
+        # Order 2 scatter
+        S2_buckets = [] # Wink-wink
+        for k1 in range(P1):
+            idx = children[k1]
+            if not idx:
+                continue
+            idx_arr =  bandpass_modulus_fft(U1[:, k1, :], psi2_hat[idx_arr])
+            U2 =  bandpass_modulus_fft(U1[:, k1, :], psi2_hat[idx_arr])
+            S2_buckets.append(lowpass(U2, phi_hat, cfg.T))
+        
+        # Return scatterings
+        return S0, S1, S2
+
+    return scatter
