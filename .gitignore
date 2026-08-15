@@ -4,3 +4,6 @@ user.bazelrc
 /bazel-*
 third_party/
 WORKSPACE
+
+**/__pycache__
+output/morse_scattering.mlir
