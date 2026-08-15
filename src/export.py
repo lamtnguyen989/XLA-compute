@@ -8,6 +8,7 @@ import jax.numpy as jnp
 from morse_wavelet import morse_scatter, ScatteringConfig
 
 RELATIVE_OUTPUT_FILE = "../output/morse_scattering.mlir"
+RELATIVE_SERIALIZED_FILE = "../output/morse_scattering.bin"
 
 def exporting_configuration(cfg: ScatteringConfig):
     scatter, meta = morse_scatter(cfg)
@@ -35,6 +36,11 @@ def main():
         f.write(mlir_text)
     print(f"wrote {RELATIVE_OUTPUT_FILE}  ({len(mlir_text):,} chars)")
 
+
+    serialized = exported.serialize()
+    with open(RELATIVE_SERIALIZED_FILE, "wb") as f:
+        f.write(serialized)
+    print(f"wrote {RELATIVE_SERIALIZED_FILE}  ({len(serialized):,} bytes)")
 
 
 if __name__ == "__main__":
