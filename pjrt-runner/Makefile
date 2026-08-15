@@ -1,12 +1,14 @@
 CFLAGS  ?= -O3 -Wall -Wextra
 SRC_DIR = src/
+BUILD_DIR = build
 
 ifeq ($(XLA_SOURCE_DIR),)
 	$(error Set XLA_SOURCE_DIR=/path/to/xla, e.g. make XLA_SOURCE_DIR=../xla)
 endif
 
 pjrt_runner: $(SRC_DIR)/pjrt_runner.c
-	$(CC) $(CFLAGS) -I$(XLA_SOURCE_DIR) $@ $< -ldl
+	mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -I$(XLA_SOURCE_DIR) $< -ldl -o $(BUILD_DIR)/$@
 
 clean:
-	rm -f pjrt_runner
+	rm -rf $(BUILD_DIR)
