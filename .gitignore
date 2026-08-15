@@ -1,6 +1,6 @@
 compile_commands.json
 build/
 user.bazelrc
-bazel-*
+/bazel-*
 third_party/
 WORKSPACE
