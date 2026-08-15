@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import soundfile as sf
 
+from dataclasses import dataclass
+
 ###
 # Morse Wavelet computation
 ###
@@ -77,6 +79,63 @@ def log_scales(n_scales: int, f_min: float, f_max: float, beta: float = 3.0, gam
 #   Scattering implementation
 ###
 
-def gaussian_low_pass_filter(omega: jnp.ndarray, sigma: float) -> jnp.ndarray:
+@dataclass
+class ScatteringConfig:
+    B: int =  32            # Batch size
+    N: int = 88_200         # Time samples
+    sr: float =  44_100.0   # Sampling rate
+    beta: float = 3.0       # Morse beta parameter
+    gamma: float =  20.0    # Morse gamma parameter
+    J: int = 17             # Octaves
+    Q1: int = 8             # Order 1 quality filters
+    Q2: int = 1             # Order 2 quality filters
+    ref_freq: float = sr/4  # Nyquist
+    T: int = N              # Time-shift invariance count (striding, single global one by default)
+
+# Lowpass filter 
+def gaussian_lowpass_filter(omega: jnp.ndarray, sigma: float) -> jnp.ndarray:
     return jnp.exp(-0.5 * (omega/sigma)**2)
+
+# Bandpass
+def bandpass_modulus(x: jnp.ndarray, psi_hat: jnp.ndarray) -> jnp.ndarray:
+    x_hat = jnp.fft.fft(x, axis=1)
+    W_hat = x_hat[:, None, :] * psi_hat[None, :, :]
+    return jnp.abs(jnp.ifft(W_hat), axis=-1)
+
+
+def octave_frequencies(J: int, Q: int, ref_freq: float):
+    j_idx = jnp.repeat(np.arange(J), Q)
+    q_idx = jnp.tile(np.arange(Q), J)
+    freqs =  (2.0 * ref_freq)**(-(j_idx + q_idx / Q))
+    return freqs, j_idx
+
+# Convolution filterbank building
+def morse_filterbank(cfg: ScatteringConfig):
+    # Buidling octaves and associated frequency range
+    freqs_1, oct_1 = octave_frequencies(cfg.J, cfg.Q1, cfg.ref_freq)
+    freqs_2, oct_2 = octave_frequencies(cfg.J, cfg.Q2, cfg.ref_freq)
+    
+    # Building scales from frequencies
+    scales_1 = hz_to_scale(jnp.asarray(freqs_1), cfg.beta, cfg.gamma)
+    scales_2 = hz_to_scale(jnp.asarray(freqs_2), cfg.beta, cfg.gamma)
+
+    # Establish the frequency grids
+    omega_full = 2.0*jnp.pi * jnp.fft.fftfreq(cfg.N, d=1.0/cfg.sr)
+    omega_real = 2.0*jnp.pi * jnp.fft.rfftfreq(cfg.N, d=1.0/cfg.sr)
+
+    # Making the Morse Wavelet fileterbanks
+    morse = lambda s: morse_wavelet_freq_L1(s*omega_full, cfg.beta, cfg.gamma)
+    psi_hat_1 = jax.vmap(morse)(scales_1).astype(jnp.float32)
+    psi_hat_2 = jax.vmap(morse)(scales_2).astype(jnp.float32)
+
+    # Lowpass filter
+    sigma = jnp.pi * cfg.sr / cfg.T
+    phi_hat = gaussian_lowpass_filter(omega_real, sigma).astype(jnp.float32)
+
+    return [
+        freqs_1, oct_1,
+        freqs_2, oct_2,
+        psi_hat_1, psi_hat_2,
+        phi_hat
+    ]
 
