@@ -3,7 +3,7 @@ SRC_DIR = src
 BUILD_DIR = build
 
 # Compile protobuf for internal MLIR compile
-$(BUILD_DIR)/compile_options.bin: $(SRC_DIR)/compile_options.txt
+$(BUILD_DIR)/compile_options.bin: $(SRC_DIR)/compile_options.textproto
 	@if [ -z "$(XLA_SOURCE_DIR)" ]; then \
 		echo "Error: Set XLA_SOURCE_DIR=/path/to/xla, e.g. make XLA_SOURCE_DIR=... pjrt_runner"; \
 		exit 1; \

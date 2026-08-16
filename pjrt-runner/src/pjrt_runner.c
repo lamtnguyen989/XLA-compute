@@ -10,7 +10,6 @@
 #include <errno.h>
 
 #include "xla/pjrt/c/pjrt_c_api.h"
-#include "pjrt_runner.h"
 
 // Define the input dimension
 #define BATCH_SIZE 32
