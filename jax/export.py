@@ -5,7 +5,10 @@ import os
 
 import jax
 import jax.numpy as jnp
+from jax._src import xla_bridge as xb
 from morse_wavelet import morse_scatter, ScatteringConfig
+
+BACKEND_NAME = "cuda"
 
 RELATIVE_OUTPUT_FILE = "../output/morse_scattering.mlir"
 RELATIVE_SERIALIZED_FILE = "../output/morse_scattering.bin"
@@ -36,7 +39,20 @@ def main():
         f.write(mlir_text)
     print(f"wrote {RELATIVE_OUTPUT_FILE}  ({len(mlir_text):,} chars)")
 
-    
+    # Serialize to a binary
+    x_spec = jax.ShapeDtypeStruct((cfg.B, cfg.N), jnp.float32)
+    compiled = scatter.trace(x_spec).lower().compile()
+    executable = compiled._executable.xla_extension_executable()
+    backend = xb.get_backend(BACKEND_NAME)
+    serialized = backend.serialize_executable(executable)
+
+    with open(RELATIVE_SERIALIZED_FILE, "wb") as f:
+        f.write(serialized)
+        
+    print(f"wrote {RELATIVE_SERIALIZED_FILE}  ({len(serialized):,} bytes)")
+    print(f"Serialzied backend: {jax.default_backend()}")
+    print(f"Devices:            {jax.devices()}")
+
 
 if __name__ == "__main__":
     main()
