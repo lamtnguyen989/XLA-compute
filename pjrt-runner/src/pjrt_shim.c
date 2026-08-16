@@ -11,8 +11,7 @@
 
 // Define the input dimension
 #define BATCH_SIZE 32
-#define N 88200
-
+#define N (1 << 16)
 
 int main(int argc, char** argv)
 {

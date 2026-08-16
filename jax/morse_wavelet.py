@@ -81,11 +81,11 @@ def log_scales(n_scales: int, f_min: float, f_max: float, beta: float = 3.0, gam
 @dataclass
 class ScatteringConfig:
     B: int =  32            # Batch size
-    N: int = 88_200         # Time samples
     sr: float =  44_100.0   # Sampling rate
+    N: int = 2**16          # Time samples for FFT (next power of 2 closest to sample rate)
     beta: float = 3.0       # Morse beta parameter
     gamma: float =  20.0    # Morse gamma parameter
-    J: int = 17             # Octaves
+    J: int = 16             # Octaves
     Q1: int = 8             # Order 1 quality filters
     Q2: int = 1             # Order 2 quality filters
     ref_freq: float = sr/4  # Nyquist
