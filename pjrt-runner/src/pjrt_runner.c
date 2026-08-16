@@ -134,7 +134,7 @@ int main(int argc, char** argv)
     };
 
     PJRT_Client_Compile_Args compile_args = {
-        .struct_size = PJRT_Compile_Args_STRUCT_SIZE,
+        .struct_size = PJRT_Client_Compile_Args_STRUCT_SIZE,
         .extension_start = NULL,
         .client = client,
         .program = &program,
@@ -248,4 +248,7 @@ int main(int argc, char** argv)
     CHECK_PJRT(api, api->PJRT_LoadedExecutable_Execute(&exec_args), "PJRT_LoadedExecutable_Execute");
 
     // Examining output
+
+    // Cleanup
+    free(host_input);
 }
