@@ -123,9 +123,24 @@ int main(int argc, char** argv)
             api->pjrt_api_version.minor_version);
 
     // Create a client
+    const char* allocator_key = "allocator";
+    const char* allocator_val = "address"; // BFC allocator is overkill for small model we are running
+    PJRT_NamedValue client_options[1] = {
+        {
+            .struct_size = PJRT_NamedValue_STRUCT_SIZE,
+            .extension_start = NULL,
+            .name = allocator_key,
+            .name_size = strlen(allocator_key),
+            .type= PJRT_NamedValue_kString,
+            .string_value = allocator_val,
+            .value_size = strlen(allocator_val),
+        },
+    };
+
     PJRT_Client_Create_Args client_args = {
         .struct_size = PJRT_Client_Create_Args_STRUCT_SIZE,
-        .create_options = NULL,
+        .create_options = client_options,
+        .num_options = 1,
         .kv_get_callback = NULL,
         .kv_put_callback = NULL,
         .kv_put_user_arg = NULL,
