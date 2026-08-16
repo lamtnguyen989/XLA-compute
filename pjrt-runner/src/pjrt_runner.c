@@ -76,6 +76,21 @@ static char *read_file(const char *path, size_t *out_size)
     return buf;
 }
 
+char* load_proto_blob(const char* filename, size_t* out_size) {
+    FILE* f = fopen(filename, "rb");
+    if (!f) return NULL;
+    
+    CHECK(fseek(f, 0, SEEK_END) == 0, "fseek(%s): %s\n", filename, strerror(errno));
+    *out_size = ftell(f);
+    CHECK(fseek(f, 0, SEEK_SET) == 0, "fseek(%s) rewind: %s\n", filename, strerror(errno));
+    
+    char* buffer = malloc(*out_size);
+    fread(buffer, 1, *out_size, f);
+    fclose(f);
+    
+    return buffer;
+}
+
 
 // main()
 int main(int argc, char** argv)
@@ -133,13 +148,20 @@ int main(int argc, char** argv)
         .format_size = sizeof(format) - 1,
     };
 
+    size_t proto_size = 0;
+    char* proto_bytes = load_proto_blob("build/compile_options.bin", &proto_size);
+    if (!proto_bytes) {
+        fprintf(stderr, "Failed to load build/compile_options.bin\n");
+        exit(1);
+    }
+
     PJRT_Client_Compile_Args compile_args = {
         .struct_size = PJRT_Client_Compile_Args_STRUCT_SIZE,
         .extension_start = NULL,
         .client = client,
         .program = &program,
-        .compile_options = NULL,    // TODO: Optimize the compilation
-        .compile_options_size = 0,
+        .compile_options = proto_bytes,    // TODO: Optimize the compilation
+        .compile_options_size = proto_size,
         .executable = NULL
     };
 
@@ -148,6 +170,7 @@ int main(int argc, char** argv)
 
     printf("IR compiled.\n");
     free(mlir_text);
+    free(proto_bytes);
 
     // Pick a client Device
     PJRT_Client_AddressableDevices_Args device_args = {
@@ -180,6 +203,8 @@ int main(int argc, char** argv)
         .struct_size = PJRT_Client_BufferFromHostBuffer_Args_STRUCT_SIZE,
         .extension_start = NULL,
         .client = client,
+        .data = host_input,
+        .type = PJRT_Buffer_Type_F32,
         .dims = dims,
         .num_dims = INPUT_DIM,
         .byte_strides = NULL,
