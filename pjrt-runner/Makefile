@@ -2,12 +2,20 @@ CFLAGS  ?= -O3 -Wall -Wextra -flto
 SRC_DIR = src
 BUILD_DIR = build
 
-pjrt_runner: $(SRC_DIR)/pjrt_runner.c
+$(BUILD_DIR)/compile_options.bin: $(SRC_DIR)/compile_options.txt
 	@if [ -z "$(XLA_SOURCE_DIR)" ]; then \
 		echo "Error: Set XLA_SOURCE_DIR=/path/to/xla, e.g. make XLA_SOURCE_DIR=... pjrt_runner"; \
 		exit 1; \
 	fi
 
+	mkdir -p $(BUILD_DIR)
+
+	protoc --proto_path=$(XLA_SOURCE_DIR) \
+	   --encode=xla.CompileOptionsProto \
+	   $(XLA_SOURCE_DIR)/xla/pjrt/proto/compile_options.proto \
+	   < $< > $@
+
+pjrt_runner: $(SRC_DIR)/pjrt_runner.c $(BUILD_DIR)/compile_options.bin
 	mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I $(XLA_SOURCE_DIR) $< -ldl -o $(BUILD_DIR)/$@
 

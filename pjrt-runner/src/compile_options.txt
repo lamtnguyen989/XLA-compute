@@ -1,0 +1,4 @@
+executable_build_options {
+  num_replicas: 1
+  num_partitions: 1
+}
