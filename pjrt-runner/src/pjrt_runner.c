@@ -80,9 +80,9 @@ char* load_proto_blob(const char* filename, size_t* out_size) {
     FILE* f = fopen(filename, "rb");
     if (!f) return NULL;
     
-    fseek(f, 0, SEEK_END);
+    CHECK(fseek(f, 0, SEEK_END) == 0, "fseek(%s): %s\n", filename, strerror(errno));
     *out_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
+    CHECK(fseek(f, 0, SEEK_SET) == 0, "fseek(%s) rewind: %s\n", filename, strerror(errno));
     
     char* buffer = malloc(*out_size);
     fread(buffer, 1, *out_size, f);
