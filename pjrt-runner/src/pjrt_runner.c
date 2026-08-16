@@ -142,6 +142,7 @@ int main(int argc, char** argv)
         .compile_options_size = 0,
         .executable = NULL
     };
+
     CHECK_PJRT(api, api->PJRT_Client_Compile(&compile_args), "PJRT_Client_Compile");
     PJRT_LoadedExecutable* executable = compile_args.executable;
 
@@ -194,13 +195,7 @@ int main(int argc, char** argv)
     CHECK_PJRT(api, api->PJRT_Client_BufferFromHostBuffer(&buf_args), "PJRT_Client_BufferFromHostBuffer");
     PJRT_Buffer *input_buffer = buf_args.buffer;
     
-    if (buf_args.done_with_host_buffer) {
-        PJRT_Event_Await_Args await_args;
-        memset(&await_args, 0, sizeof(await_args));
-        await_args.struct_size = PJRT_Event_Await_Args_STRUCT_SIZE;
-        await_args.event = buf_args.done_with_host_buffer;
-        CHECK_PJRT(api, api->PJRT_Event_Await(&await_args), "PJRT_Event_Await(input)");
-    }
+    PJRT_Event *input_done_event = buf_args.done_with_host_buffer;
 
 
     // Execute options
@@ -229,8 +224,8 @@ int main(int argc, char** argv)
     PJRT_Buffer* const* argument_lists[1] = {arg_list};
 
     // Execution output
-    PJRT_Buffer *out_storage[3] = {0};
-    PJRT_Buffer **output_lists[1] = {out_storage};
+    PJRT_Buffer *output_storage[OUTPUT_DIM] = {0};
+    PJRT_Buffer **output_lists[1] = {output_storage};
 
     // Execute model
     PJRT_LoadedExecutable_Execute_Args exec_args = {
@@ -248,7 +243,105 @@ int main(int argc, char** argv)
     CHECK_PJRT(api, api->PJRT_LoadedExecutable_Execute(&exec_args), "PJRT_LoadedExecutable_Execute");
 
     // Examining output
+    size_t output_num_elems[OUTPUT_DIM] = {0};
+    float *host_output[OUTPUT_DIM] = {0};
+    PJRT_Event *output_done_event[OUTPUT_DIM] = {0};
+
+    for (int i = 0; i < OUTPUT_DIM; i++) {
+        PJRT_Buffer_Dimensions_Args dim_args = {
+            .struct_size = PJRT_Buffer_Dimensions_Args_STRUCT_SIZE,
+            .extension_start = NULL,
+            .buffer = output_storage[i],
+        };
+        CHECK_PJRT(api, api->PJRT_Buffer_Dimensions(&dim_args), "PJRT_Buffer_Dimensions");
+
+        size_t num_elems = 1;
+        for (size_t d = 0; d < dim_args.num_dims; d++) {
+            num_elems *= (size_t)dim_args.dims[d];
+        }
+
+        output_num_elems[i] = num_elems;
+        host_output[i] = (float*) malloc(num_elems * sizeof(float));
+
+        PJRT_Buffer_ToHostBuffer_Args to_host_args = {
+            .struct_size = PJRT_Buffer_ToHostBuffer_Args_STRUCT_SIZE,
+            .extension_start = NULL,
+            .src = output_storage[i],
+            .dst = host_output[i],
+            .dst_size = num_elems * sizeof(float),
+            .event = NULL,  // out
+        };
+
+        CHECK_PJRT(api, api->PJRT_Buffer_ToHostBuffer(&to_host_args), "PJRT_Buffer_ToHostBuffer");
+        output_done_event[i] = to_host_args.event;
+    }
+    
+    // Await output transfers
+    for (int i = 0; i < OUTPUT_DIM; i++) {
+        if (!output_done_event[i]) 
+            continue;
+
+        PJRT_Event_Await_Args await_args = {
+            .struct_size = PJRT_Event_Await_Args_STRUCT_SIZE,
+            .extension_start = NULL,
+            .event = output_done_event[i],
+        };
+        CHECK_PJRT(api, api->PJRT_Event_Await(&await_args), "PJRT_Event_Await(output)");
+    }
+
+    const char *names[OUTPUT_DIM] = {"S0", "S1", "S2"};
+    for (int i = 0; i < OUTPUT_DIM; i++) {
+        printf("%s: %zu elements, first values:", names[i], output_num_elems[i]);
+        for (size_t k = 0; k < 5 && k < output_num_elems[i]; k++) {
+            printf(" %f", host_output[i][k]);
+        }
+        printf("\n");
+    }
+
 
     // Cleanup
+    for (int i = 0; i < OUTPUT_DIM; i++) {
+        free(host_output[i]);
+        PJRT_Buffer_Destroy_Args d = {
+            .struct_size = PJRT_Buffer_Destroy_Args_STRUCT_SIZE,
+            .extension_start = NULL,
+            .buffer = output_storage[i],
+        };
+        CHECK_PJRT(api, api->PJRT_Buffer_Destroy(&d), "PJRT_Buffer_Destroy(output)");
+    }
+
+    PJRT_Buffer_Destroy_Args in_destroy_args = {
+        .struct_size = PJRT_Buffer_Destroy_Args_STRUCT_SIZE,
+        .extension_start = NULL,
+        .buffer = input_buffer,
+    };
+    CHECK_PJRT(api, api->PJRT_Buffer_Destroy(&in_destroy_args), "PJRT_Buffer_Destroy(input)");
+
+    if (input_done_event) {
+        PJRT_Event_Await_Args await_args = {
+            .struct_size = PJRT_Event_Await_Args_STRUCT_SIZE,
+            .extension_start = NULL,
+            .event = input_done_event,
+        };
+        CHECK_PJRT(api, api->PJRT_Event_Await(&await_args), "PJRT_Event_Await(input)");
+    }
     free(host_input);
+ 
+    PJRT_LoadedExecutable_Destroy_Args exec_destroy_args = {
+        .struct_size = PJRT_LoadedExecutable_Destroy_Args_STRUCT_SIZE,
+        .extension_start = NULL,
+        .executable = executable,
+    };
+    CHECK_PJRT(api, api->PJRT_LoadedExecutable_Destroy(&exec_destroy_args), "PJRT_LoadedExecutable_Destroy");
+ 
+    PJRT_Client_Destroy_Args client_destroy_args = {
+        .struct_size = PJRT_Client_Destroy_Args_STRUCT_SIZE,
+        .extension_start = NULL,
+        .client = client,
+    };
+    CHECK_PJRT(api, api->PJRT_Client_Destroy(&client_destroy_args), "PJRT_Client_Destroy");
+ 
+    dlclose(pjrt_handle);
+    return 0;
+
 }
