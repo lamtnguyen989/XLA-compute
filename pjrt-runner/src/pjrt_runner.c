@@ -29,8 +29,7 @@
                         _where);                                               \
                 exit(1);                                                       \
             }                                                                  \
-            PJRT_Error_Message_Args msg_args;                                  \
-            memset(&msg_args, 0, sizeof(msg_args));                            \
+            PJRT_Error_Message_Args msg_args = {0};                           \
             msg_args.struct_size = PJRT_Error_Message_Args_STRUCT_SIZE;        \
             msg_args.error = _err;                                             \
             _api->PJRT_Error_Message(&msg_args);                               \
@@ -326,6 +325,13 @@ int main(int argc, char** argv)
             .event = output_done_event[i],
         };
         CHECK_PJRT(api, api->PJRT_Event_Await(&await_args), "PJRT_Event_Await(output)");
+
+        PJRT_Event_Destroy_Args out_ev_destroy = {
+            .struct_size = PJRT_Event_Destroy_Args_STRUCT_SIZE,
+            .extension_start = NULL,
+            .event = output_done_event[i],
+        };
+        CHECK_PJRT(api, api->PJRT_Event_Destroy(&out_ev_destroy), "PJRT_Event_Destroy(output)");
     }
 
     const char *names[OUTPUT_DIM] = {"S0", "S1", "S2"};
@@ -363,6 +369,13 @@ int main(int argc, char** argv)
             .event = input_done_event,
         };
         CHECK_PJRT(api, api->PJRT_Event_Await(&await_args), "PJRT_Event_Await(input)");
+
+        PJRT_Event_Destroy_Args input_ev_destroy = {
+            .struct_size = PJRT_Event_Destroy_Args_STRUCT_SIZE,
+            .extension_start = NULL,
+            .event = input_done_event,
+        };
+        CHECK_PJRT(api, api->PJRT_Event_Destroy(&input_ev_destroy), "PJRT_Event_Destroy(input)");
     }
     free(host_input);
  
