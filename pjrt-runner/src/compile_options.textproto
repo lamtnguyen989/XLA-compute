@@ -1,4 +1,6 @@
 executable_build_options {
   num_replicas: 1
   num_partitions: 1
+  optimization_level: EFFORT_O3
+  memory_fitting_level: EFFORT_O3
 }

@@ -150,10 +150,10 @@ def morse_scatter(cfg: ScatteringConfig=ScatteringConfig()):
     # Building filter bank first
     freqs_1, oct_1, freqs_2, oct_2, psi_hat_1, psi_hat_2, phi_hat = morse_filterbank(cfg)
 
-    # Creating list of valid order-2 childeren per order 1 filter (octave(k2) > octave(k1))
+    # Creating list of valid order-2 childeren per order 1 filter
     # Note the actual data list size is (most-likely) small therefore opted for building natively instead of parallelizing
     children: List[List[int]] = [
-        [k2 for k2 in range(len(freqs_2)) if oct_2[k2] > oct_1[k1]]
+        [k2 for k2 in range(len(freqs_2)) if freqs_2[k2] < freqs_1[k1]]
         for k1 in range(len(freqs_1))
     ]
 
