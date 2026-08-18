@@ -14,8 +14,8 @@
 // Define the input dimension
 #define BATCH_SIZE 32
 #define N (1 << 16)
-#define INPUT_DIM 2
-#define OUTPUT_DIM 3
+#define INPUT_RANK 2     
+#define OUTPUT_RANK 1    
 
 // Error checks
 #define CHECK_PJRT(api, expr, where)                                           \
@@ -108,7 +108,7 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    // Getthe API
+    // Get the API
     typedef const PJRT_Api *(*GetPjrtApiFn)(void);
     GetPjrtApiFn get_api = (GetPjrtApiFn)dlsym(pjrt_handle, "GetPjrtApi");
     if (!get_api) {
@@ -122,7 +122,7 @@ int main(int argc, char** argv)
 
     // Create a client
     const char* allocator_key = "allocator";
-    const char* allocator_val = "address"; // BFC allocator is overkill for small model we are running
+    const char* allocator_val = "address"; 
     PJRT_NamedValue client_options[1] = {
         {
             .struct_size = PJRT_NamedValue_STRUCT_SIZE,
@@ -173,7 +173,7 @@ int main(int argc, char** argv)
         .extension_start = NULL,
         .client = client,
         .program = &program,
-        .compile_options = proto_bytes,    // TODO: Optimize the compilation
+        .compile_options = proto_bytes,    
         .compile_options_size = proto_size,
         .executable = NULL
     };
@@ -183,7 +183,7 @@ int main(int argc, char** argv)
 
     printf("IR compiled.\n");
     free(mlir_text);
-    free(proto_bytes);
+    if (proto_bytes) free(proto_bytes); 
 
     // Pick a client Device
     PJRT_Client_AddressableDevices_Args device_args = {
@@ -201,7 +201,6 @@ int main(int argc, char** argv)
     }
     PJRT_Device *device = device_args.addressable_devices[0];
 
-
     // Build random test input buffer for compilation
     size_t n_in = BATCH_SIZE * N;
     float* host_input = (float*) malloc(n_in * sizeof(float));
@@ -211,7 +210,7 @@ int main(int argc, char** argv)
     }
 
     // Copy data from host
-    int64_t dims[INPUT_DIM] = {BATCH_SIZE, N};
+    int64_t dims[INPUT_RANK] = {BATCH_SIZE, N};
     PJRT_Client_BufferFromHostBuffer_Args buf_args = {
         .struct_size = PJRT_Client_BufferFromHostBuffer_Args_STRUCT_SIZE,
         .extension_start = NULL,
@@ -219,7 +218,7 @@ int main(int argc, char** argv)
         .data = host_input,
         .type = PJRT_Buffer_Type_F32,
         .dims = dims,
-        .num_dims = INPUT_DIM,
+        .num_dims = INPUT_RANK,
         .byte_strides = NULL,
         .num_byte_strides = 0,
         .host_buffer_semantics = PJRT_HostBufferSemantics_kImmutableUntilTransferCompletes,
@@ -227,14 +226,12 @@ int main(int argc, char** argv)
         .device_layout = NULL,
         .memory = NULL,
 
-        .done_with_host_buffer = NULL,   // out
-        .buffer = NULL,    // out
+        .done_with_host_buffer = NULL,   
+        .buffer = NULL,    
     };
     CHECK_PJRT(api, api->PJRT_Client_BufferFromHostBuffer(&buf_args), "PJRT_Client_BufferFromHostBuffer");
     PJRT_Buffer *input_buffer = buf_args.buffer;
-    
     PJRT_Event *input_done_event = buf_args.done_with_host_buffer;
-
 
     // Execute options
     PJRT_ExecuteOptions exec_options = {
@@ -257,12 +254,13 @@ int main(int argc, char** argv)
         .hlo_output_callbacks = NULL,
         .num_hlo_output_callbacks = 0,
     };
+    
     // Arguments to execution
     PJRT_Buffer *arg_list[1] = {input_buffer};
     PJRT_Buffer* const* argument_lists[1] = {arg_list};
 
     // Execution output
-    PJRT_Buffer *output_storage[OUTPUT_DIM] = {0};
+    PJRT_Buffer *output_storage[OUTPUT_RANK] = {0};
     PJRT_Buffer **output_lists[1] = {output_storage};
 
     // Execute model
@@ -281,11 +279,12 @@ int main(int argc, char** argv)
     CHECK_PJRT(api, api->PJRT_LoadedExecutable_Execute(&exec_args), "PJRT_LoadedExecutable_Execute");
 
     // Examining output
-    size_t output_num_elems[OUTPUT_DIM] = {0};
-    float *host_output[OUTPUT_DIM] = {0};
-    PJRT_Event *output_done_event[OUTPUT_DIM] = {0};
+    size_t output_shape[OUTPUT_RANK][2] = {0};
+    size_t output_num_elems[OUTPUT_RANK] = {0};
+    float *host_output[OUTPUT_RANK] = {0};
+    PJRT_Event *output_done_event[OUTPUT_RANK] = {0};
 
-    for (int i = 0; i < OUTPUT_DIM; i++) {
+    for (int i = 0; i < OUTPUT_RANK; i++) {
         PJRT_Buffer_Dimensions_Args dim_args = {
             .struct_size = PJRT_Buffer_Dimensions_Args_STRUCT_SIZE,
             .extension_start = NULL,
@@ -293,11 +292,13 @@ int main(int argc, char** argv)
         };
         CHECK_PJRT(api, api->PJRT_Buffer_Dimensions(&dim_args), "PJRT_Buffer_Dimensions");
 
-        size_t num_elems = 1;
-        for (size_t d = 0; d < dim_args.num_dims; d++) {
-            num_elems *= (size_t)dim_args.dims[d];
-        }
-
+        // Explicit rank check for 2D matrix
+        CHECK(dim_args.num_dims == 2, "Expected 2D matrix output, but got %zu dimensions\n", dim_args.num_dims);
+        
+        output_shape[i][0] = (size_t)dim_args.dims[0]; // Rows (Batch)
+        output_shape[i][1] = (size_t)dim_args.dims[1]; // Cols (Scattering Features)
+        
+        size_t num_elems = output_shape[i][0] * output_shape[i][1];
         output_num_elems[i] = num_elems;
         host_output[i] = (float*) malloc(num_elems * sizeof(float));
 
@@ -315,7 +316,7 @@ int main(int argc, char** argv)
     }
     
     // Await output transfers
-    for (int i = 0; i < OUTPUT_DIM; i++) {
+    for (int i = 0; i < OUTPUT_RANK; i++) {
         if (!output_done_event[i]) 
             continue;
 
@@ -334,18 +335,23 @@ int main(int argc, char** argv)
         CHECK_PJRT(api, api->PJRT_Event_Destroy(&out_ev_destroy), "PJRT_Event_Destroy(output)");
     }
 
-    const char *names[OUTPUT_DIM] = {"S0", "S1", "S2"};
-    for (int i = 0; i < OUTPUT_DIM; i++) {
-        printf("%s: %zu elements, first values:", names[i], output_num_elems[i]);
-        for (size_t k = 0; k < 5 && k < output_num_elems[i]; k++) {
-            printf(" %f", host_output[i][k]);
+    // Print values acting on the 2D matrix 
+    const char *names[OUTPUT_RANK] = {"Morse_Scatter_Output"};
+    for (int i = 0; i < OUTPUT_RANK; i++) {
+        size_t rows = output_shape[i][0];
+        size_t cols = output_shape[i][1];
+
+        printf("%s: Matrix Shape [%zu, %zu] (%zu total elements)\n", names[i], rows, cols, output_num_elems[i]);
+        printf("First values from Batch 0:\n");
+        for (size_t c = 0; c < 5 && c < cols; c++) {
+            // 2D matrix indexing: memory[row * num_cols + col]
+            printf(" %f", host_output[i][0 * cols + c]); 
         }
         printf("\n");
     }
 
-
     // Cleanup
-    for (int i = 0; i < OUTPUT_DIM; i++) {
+    for (int i = 0; i < OUTPUT_RANK; i++) {
         free(host_output[i]);
         PJRT_Buffer_Destroy_Args d = {
             .struct_size = PJRT_Buffer_Destroy_Args_STRUCT_SIZE,
@@ -395,5 +401,4 @@ int main(int argc, char** argv)
  
     dlclose(pjrt_handle);
     return 0;
-
 }

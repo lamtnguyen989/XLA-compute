@@ -25,6 +25,7 @@ typedef struct  {
 // Function declerations
 PjrtRunner* pjrt_runner_create(const char* plugin_path, const char* allocator);
 int pjrt_runner_compile(PjrtRunner* runner, const char* mlir_path, const char* compile_options_path);
+void pjrt_runner_destroy(PjrtRunner* r);
 
 
 #endif  // PJRT_SHIM_H_
