@@ -88,7 +88,7 @@ class ScatteringConfig:
     J: int = 16             # Octaves
     Q1: int = 8             # Order 1 quality filters
     Q2: int = 1             # Order 2 quality filters
-    ref_freq: float = sr/4  # Nyquist
+    ref_freq: float = sr/4  # Nyquist/2
     T: int = N              # Time-shift invariance count (single global one by default, if not this will give back floor(N/T) frames)
 
 # Lowpass filter 
@@ -195,7 +195,8 @@ def morse_scatter(cfg: ScatteringConfig=ScatteringConfig()):
         S2 = (jnp.concatenate(S2_buckets, axis=1) if S2_buckets
               else jnp.zeros((signal.shape[0], 0, S0.shape[-1]), dtype=jnp.float32))
 
-        # Return scatterings
-        return S0, S1, S2
+        # Return a batch of flatten scatterings (represented as a matrix)
+        batch_size = signal.shape[0]
+        return jnp.concatenate([S0, S1, S2], axis=1).reshape(batch_size, -1)
 
     return scatter, metadata
