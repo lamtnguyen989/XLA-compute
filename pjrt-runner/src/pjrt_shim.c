@@ -22,6 +22,17 @@ PjrtRunner* pjrt_runner_create(const char* plugin_path, const char* allocator)
     return NULL; // TODO
 }
 
+void pjrt_runner_destroy(PjrtRunner* r)
+{
+    // Do nothing if runner is already null
+    if (!r)
+        return;
+
+    // 
+    
+}
+
+
 int main(int argc, char** argv)
 {
     return 0;
